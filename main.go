@@ -29,8 +29,8 @@ func displayDepTree(graph *module.Graph, badDeps map[string]*module.Module, refM
 
 	stack := make(map[string]struct{})
 
-	for _, m := range graph.Dependencies {
-		addToTree(tree, m, badDeps, refMod, stack)
+	for _, dep := range graph.Dependencies {
+		addNode(tree, &graph.Module, dep, badDeps, refMod, stack)
 	}
 
 	fmt.Println(tree.String())
@@ -39,20 +39,39 @@ func displayDepTree(graph *module.Graph, badDeps map[string]*module.Module, refM
 func addToTree(tree treeprint.Tree, m *module.Module, badDeps map[string]*module.Module, refMod *module.ModuleInfo, stack map[string]struct{}) {
 	tree = tree.AddBranch(nodeStr(m, badDeps, refMod))
 
+	stack = dupStack(stack)
 	for _, dep := range m.Dependencies {
-		if _, in := badDeps[dep.CanonicalName()]; !in {
-			continue
-		}
-
-		edge := m.CanonicalName() + "->" + dep.CanonicalName()
-		if _, ok := stack[edge]; ok {
-			tree.AddBranch(nodeStr(dep, badDeps, refMod) + " [...] (cycle)")
-			continue
-		}
-		stack[edge] = struct{}{}
-
-		addToTree(tree, dep, badDeps, refMod, stack)
+		addNode(tree, m, dep, badDeps, refMod, stack)
 	}
+}
+
+func addNode(tree treeprint.Tree, m *module.Module, dep *module.Module, badDeps map[string]*module.Module, refMod *module.ModuleInfo, stack map[string]struct{}) {
+	if _, in := badDeps[dep.CanonicalName()]; !in {
+		return
+	}
+
+	if dep.DirectDepOnLower(refMod) {
+		tree.AddBranch(nodeStr(dep, badDeps, refMod))
+		return
+	}
+
+	edge := m.CanonicalName() + "->" + dep.CanonicalName()
+	if _, ok := stack[edge]; ok {
+		tree.AddBranch(nodeStr(dep, badDeps, refMod)).AddBranch("[...] (cycle)")
+		return
+	}
+
+	stack[edge] = struct{}{}
+	addToTree(tree, dep, badDeps, refMod, stack)
+}
+
+func dupStack(s map[string]struct{}) map[string]struct{} {
+	stack := make(map[string]struct{}, len(s)+10)
+	for k := range s {
+		stack[k] = struct{}{}
+	}
+
+	return stack
 }
 
 func nodeStr(m *module.Module, badDeps map[string]*module.Module, refMod *module.ModuleInfo) string {
