@@ -25,32 +25,33 @@ func main() {
 }
 
 func displayDepTree(graph *module.Graph, badDeps map[string]*module.Module, refMod *module.ModuleInfo) {
-	tree := treeprint.New()
+	tree := treeprint.NewWithRoot(nodeStr(&graph.Module, badDeps, refMod))
 
 	stack := make(map[string]struct{})
-	addToTree(tree, &graph.Module, badDeps, refMod, stack, true)
+
+	for _, m := range graph.Dependencies {
+		addToTree(tree, m, badDeps, refMod, stack)
+	}
 
 	fmt.Println(tree.String())
 }
 
-func addToTree(tree treeprint.Tree, m *module.Module, badDeps map[string]*module.Module, refMod *module.ModuleInfo, stack map[string]struct{}, topLvl bool) {
+func addToTree(tree treeprint.Tree, m *module.Module, badDeps map[string]*module.Module, refMod *module.ModuleInfo, stack map[string]struct{}) {
 	tree = tree.AddBranch(nodeStr(m, badDeps, refMod))
 
 	for _, dep := range m.Dependencies {
-		if _, in := badDeps[dep.CanonicalName()]; !in && !topLvl {
+		if _, in := badDeps[dep.CanonicalName()]; !in {
 			continue
 		}
 
 		edge := m.CanonicalName() + "->" + dep.CanonicalName()
 		if _, ok := stack[edge]; ok {
-			tree = tree.AddBranch(nodeStr(dep, badDeps, refMod) + " [...] (cycle)")
+			tree.AddBranch(nodeStr(dep, badDeps, refMod) + " [...] (cycle)")
 			continue
 		}
 		stack[edge] = struct{}{}
 
-		// cStack := dupStack(stack)
-
-		addToTree(tree, dep, badDeps, refMod, stack, false)
+		addToTree(tree, dep, badDeps, refMod, stack)
 	}
 }
 
